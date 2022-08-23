@@ -1,10 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:crypto_app/helper.dart';
+import 'package:crypto_app/locator.dart';
+import 'package:crypto_app/model/candle.dart';
+import 'package:crypto_app/model/news.dart';
 import 'package:crypto_app/page/coin_detail_page.dart';
 import 'package:crypto_app/model/data.dart';
+import 'package:crypto_app/repo.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
+import 'package:loading_gifs/loading_gifs.dart';
+import 'package:lottie/lottie.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({Key? key}) : super(key: key);
@@ -14,11 +23,24 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  //CoinRepo coinRepo = s1<CoinRepo>();
   List<CoinModel> _searchResult = [];
+  List<CoinModel> _newList = [];
   final controller = TextEditingController();
-  bool _isDesc = false;
+  bool _marketCapDesc = true;
+  bool _nameDesc = false;
+  bool isload = false;
+  late int endTime;
+
+  getCurrentTime() {
+    DateTime now = DateTime.now();
+    endTime = (now.millisecondsSinceEpoch / 1000).round();
+    print(endTime);
+    return endTime;
+  }
 
   Future<List<CoinModel>> fetchCoin() async {
+    isload = true;
     coinList = [];
     final response = await http.get(Uri.parse(
         'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=100&page=1&sparkline=false'));
@@ -33,12 +55,44 @@ class _HomePageState extends State<HomePage> {
             coinList.add(CoinModel.fromJson(map));
           }
         }
-        setState(() {
-          coinList;
-        });
+        if (mounted) {
+          setState(() {});
+        }
       }
+      print("Fetched");
+      isload = false;
       return coinList;
+    } else if (response.statusCode == 110) {
+      print("Already 110, fetched");
+      return fetchCoin();
     } else {
+      throw Exception('Failed to load coins');
+    }
+  }
+
+  Future<List<News>> fetchNews() async {
+    newsList = [];
+    final response = await http.get(Uri.parse(
+        'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&tickers=CRYPTO:BTC&topics=blockchain&apikey=233fae3a7amsh105b58bae6d1fddp1d6c86jsn28c980dab593'));
+    if (response.statusCode == 200) {
+      //List<dynamic> values = [];
+      // values = json.decode(response.body);
+      Map<String, dynamic> data = json.decode(response.body);
+      if (data.length > 0) {
+        for (int i = 0; i < data.length; i++) {
+          if (data[i] != null) {
+            newsList.add(News.fromJson(data[i]));
+          }
+        }
+      }
+      //print(newsList[0].title);
+      print("Fetched news");
+      return newsList;
+    } else if (response.statusCode == 110) {
+      print("Already 110, fetched");
+      return fetchNews();
+    } else {
+      print(response.statusCode);
       throw Exception('Failed to load coins');
     }
   }
@@ -46,7 +100,9 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     fetchCoin();
-    Timer.periodic(Duration(seconds: 10), (timer) => fetchCoin());
+    fetchNews();
+    getCurrentTime();
+    Timer.periodic(Duration(seconds: 120), (timer) => getCurrentTime());
     super.initState();
   }
 
@@ -56,45 +112,52 @@ class _HomePageState extends State<HomePage> {
       setState(() {});
       return;
     }
-
-    coinList.forEach((userDetail) {
-      if (userDetail.name.toLowerCase().contains(text.toLowerCase()))
-        _searchResult.add(userDetail);
+    setState(() {
+      coinList.where((element) {
+        var coinName = element.name.toLowerCase();
+        return coinName.contains(text.toLowerCase());
+      }).toList();
     });
 
-    setState(() {});
+    // coinList.forEach((userDetail) {
+    //   if (userDetail.name.toLowerCase().contains(text.toLowerCase()))
+    //     _searchResult.add(userDetail);
+    // });
+
+    // setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: Colors.grey[300],
-        appBar: AppBar(
-          backgroundColor: Colors.grey[300],
-          title: Text(
-            'CRYPTOBASE',
-            style: TextStyle(
-              color: Colors.grey[900],
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        body: getBody());
+      body: getBody(),
+    );
   }
 
   Widget getBody() {
     return SingleChildScrollView(
       scrollDirection: Axis.vertical,
       child: Column(
-        children: [
+        children: <Widget>[
           SizedBox(
-            height: 10,
+            height: 45,
           ),
           Container(
-            height: 100,
+            padding: const EdgeInsets.only(left: 16),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Watchlist',
+              style: TextStyle(
+                fontSize: 30,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          Container(
+            height: 60,
+            padding: const EdgeInsets.only(top: 5),
+            margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Container(
-              margin: const EdgeInsets.fromLTRB(16, 16, 16, 16),
               child: TextField(
                 controller: controller,
                 decoration: InputDecoration(
@@ -103,227 +166,273 @@ class _HomePageState extends State<HomePage> {
                     border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(20),
                         borderSide: const BorderSide(color: Colors.black))),
-                onChanged: onSearchTextChanged,
+                onChanged: searchFood,
               ),
             ),
           ),
-          TextButton.icon(
-              onPressed: () {
-                return setState(() => _isDesc = !_isDesc);
-              },
-              icon: RotatedBox(
-                quarterTurns: 1,
-                child: Icon(Icons.compare_arrows_outlined),
+          Stack(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton.icon(
+                        onPressed: () {
+                          return setState(() => _nameDesc = !_nameDesc);
+                        },
+                        icon: RotatedBox(
+                          quarterTurns: 0,
+                          child: Icon(_nameDesc
+                              ? CupertinoIcons.chevron_down
+                              : CupertinoIcons.chevron_up),
+                        ),
+                        label: Text('Name')),
+                    TextButton.icon(
+                        onPressed: () {
+                          return setState(
+                              () => _marketCapDesc = !_marketCapDesc);
+                        },
+                        icon: RotatedBox(
+                          quarterTurns: 0,
+                          child: Icon(!_marketCapDesc
+                              ? CupertinoIcons.chevron_down
+                              : CupertinoIcons.chevron_up),
+                        ),
+                        label: Text('Market Cap')),
+                  ],
+                ),
               ),
-              label: Text(_isDesc ? 'Descending' : 'Ascending')),
-          Container(
-            child: _searchResult.length != 0 || controller.text.isNotEmpty
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: new ListView.builder(
-                      physics: NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      itemCount: _searchResult.length,
-                      itemBuilder: (context, index) {
-                        return CoinCard(
-                          name: coinList[index].name,
-                          symbol: coinList[index].symbol,
-                          imageUrl: coinList[index].image,
-                          price: coinList[index].price.toDouble(),
-                          change: coinList[index].change.toDouble(),
-                          changePercentage:
-                              coinList[index].changePercentage.toDouble(),
-                        );
-                      },
+              _searchResult.length != 0
+                  ? Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Container(
+                          child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: isload == true
+                            ? const CircularProgressIndicator()
+                            : new ListView.separated(
+                                separatorBuilder:
+                                    (BuildContext context, int index) =>
+                                        const Divider(
+                                            color: Colors.black,
+                                            endIndent: 16,
+                                            indent: 16),
+                                physics: NeverScrollableScrollPhysics(),
+                                shrinkWrap: true,
+                                itemCount: _searchResult.length,
+                                itemBuilder: (context, index) {
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      Navigator.of(context)
+                                          .push(MaterialPageRoute(
+                                              builder: (context) => CoinDetail(
+                                                    index: index,
+                                                    coin: _searchResult,
+                                                    end: endTime,
+                                                  )));
+                                    },
+                                    child: CoinCard(
+                                      name: _searchResult[index].name,
+                                      symbol: _searchResult[index].symbol,
+                                      imageUrl: _searchResult[index].image,
+                                      price:
+                                          _searchResult[index].price.toDouble(),
+                                      change: _searchResult[index]
+                                          .change
+                                          .toDouble(),
+                                      changePercentage: _searchResult[index]
+                                          .changePercentage
+                                          .toDouble(),
+                                    ),
+                                  );
+                                },
+                              ),
+                      )),
+                    )
+                  : Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Container(
+                          child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: isload == true
+                            ? Padding(
+                                padding: const EdgeInsets.only(top: 120),
+                                child: Center(
+                                    child: Lottie.asset(
+                                        'assets/images/loading.json', height: 120, width: 160,),),
+                              )
+                            : new ListView.separated(
+                                separatorBuilder:
+                                    (BuildContext context, int index) =>
+                                        const Divider(
+                                            color: Colors.black,
+                                            endIndent: 16,
+                                            indent: 16),
+                                physics: NeverScrollableScrollPhysics(),
+                                shrinkWrap: true,
+                                itemCount: coinList.length,
+                                itemBuilder: (context, index) {
+                                  return GestureDetector(
+                                    onTap: () async {
+                                      Navigator.of(context)
+                                          .push(MaterialPageRoute(
+                                              builder: (context) => CoinDetail(
+                                                    index: index,
+                                                    coin: coinList,
+                                                    end: endTime,
+                                                  )));
+                                    },
+                                    child: CoinCard(
+                                      name: coinList[index].name,
+                                      symbol: coinList[index].symbol,
+                                      imageUrl: coinList[index].image,
+                                      price: coinList[index].price.toDouble(),
+                                      change: coinList[index].change.toDouble(),
+                                      changePercentage: coinList[index]
+                                          .changePercentage
+                                          .toDouble(),
+                                    ),
+                                  );
+                                },
+                              ),
+                      )),
                     ),
-                  )
-                : Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: new ListView.builder(
-                      physics: NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      itemCount: coinList.length,
-                      itemBuilder: (context, index) {
-                        final sorted = coinList
-                          ..sort((a, b) => _isDesc
-                              ? b.marketCap.compareTo(a.marketCap)
-                              : a.marketCap.compareTo(b.marketCap));
-                        return GestureDetector(
-                          onTap: () async {
-                            Navigator.of(context).push(MaterialPageRoute(
-                                builder: (context) =>
-                                    CoinDetail(index: index, coin: sorted)));
-                          },
-                          child: CoinCard(
-                            name: sorted[index].name,
-                            symbol: sorted[index].symbol,
-                            imageUrl: sorted[index].image,
-                            price: sorted[index].price.toDouble(),
-                            change: sorted[index].change.toDouble(),
-                            changePercentage:
-                                sorted[index].changePercentage.toDouble(),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+            ],
           ),
-          ListTile()
         ],
       ),
     );
   }
-}
 
-class CoinCard extends StatelessWidget {
-  CoinCard({
-    required this.name,
-    required this.symbol,
-    required this.imageUrl,
-    required this.price,
-    required this.change,
-    required this.changePercentage,
-  });
+  void searchFood(String query) {
+    final suggestion = coinList.where((food) {
+      final coinName = food.name.toLowerCase();
+      final input = query.toLowerCase();
+      return coinName.contains(input);
+    }).toList();
+    setState(() => _searchResult = suggestion);
+  }
 
-  String name;
-  String symbol;
-  String imageUrl;
-  double price;
-  double change;
-  double changePercentage;
-
-  @override
-  Widget build(BuildContext context) {
+  _searchItem() {
     return Padding(
-      padding: const EdgeInsets.only(top: 15, left: 10, right: 10),
-      child: Container(
-        height: 100,
-        decoration: BoxDecoration(
-          color: Colors.grey[300],
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey,
-              offset: Offset(4, 4),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-            BoxShadow(
-              color: Colors.white,
-              offset: Offset(-4, -4),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(15.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.grey,
-                      offset: Offset(4, 4),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    ),
-                    BoxShadow(
-                      color: Colors.white,
-                      offset: Offset(-4, -4),
-                      blurRadius: 10,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                ),
-                height: 60,
-                width: 60,
-                child: Padding(
-                  padding: const EdgeInsets.all(10.0),
-                  child: Image.network(imageUrl),
-                ),
-              ),
-            ),
-            Expanded(
-              child: Container(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        name,
-                        style: TextStyle(
-                          color: Colors.grey[900],
-                          fontSize: 25,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      symbol,
-                      style: TextStyle(
-                        color: Colors.grey[900],
-                        fontSize: 20,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(15.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    price.toDouble() < 1
-                        ? price.toDouble().toStringAsFixed(3)
-                        : price.toDouble().toStringAsFixed(2),
-                    style: TextStyle(
-                      color: Colors.grey[900],
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    change.toDouble() < 0
-                        ? change.toDouble().toStringAsFixed(2)
-                        : '+' + change.toDouble().toStringAsFixed(2),
-                    style: TextStyle(
-                      color: change.toDouble() < 0 ? Colors.red : Colors.green,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Text(
-                    changePercentage.toDouble() < 0
-                        ? changePercentage.toDouble().toStringAsFixed(2) + '%'
-                        : '+' +
-                            changePercentage.toDouble().toStringAsFixed(2) +
-                            '%',
-                    style: TextStyle(
-                      color: changePercentage.toDouble() < 0
-                          ? Colors.red
-                          : Colors.green,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+      padding: const EdgeInsets.all(8),
+      child: TextField(
+          decoration: InputDecoration(hintText: 'Typing..'),
+          onChanged: (text) {
+            setState(() {
+              _searchResult = _newList.where((element) {
+                var coinName = element.name.toLowerCase();
+                return coinName.contains(text.toLowerCase());
+              }).toList();
+            });
+          }),
     );
   }
+
+  // _listItem(index) {
+  //   return GestureDetector(
+  //     onTap: () async {
+  //       Navigator.of(context).push(MaterialPageRoute(
+  //           builder: (context) => CoinDetail(index: index, coin: coinList)));
+  //     },
+  //     child: CoinCard(
+  //       name: _searchResult[index].name,
+  //       symbol: _searchResult[index].symbol,
+  //       imageUrl: _searchResult[index].image,
+  //       price: _searchResult[index].price.toDouble(),
+  //       change: _searchResult[index].change.toDouble(),
+  //       changePercentage: _searchResult[index].changePercentage.toDouble(),
+  //     ),
+  //   );
+  // }
 }
+// _searchResult.length !=
+                    //         0 //|| controller.text.isNotEmpty
+                    //     ? Padding(
+                    //         padding: const EdgeInsets.symmetric(horizontal: 5),
+                    //         child: new ListView.separated(
+                    //           separatorBuilder:
+                    //               (BuildContext context, int index) =>
+                    //                   const Divider(
+                    //                       color: Colors.black,
+                    //                       endIndent: 16,
+                    //                       indent: 16),
+                    //           physics: NeverScrollableScrollPhysics(),
+                    //           shrinkWrap: true,
+                    //           itemCount: _searchResult.length,
+                    //           itemBuilder: (context, index) {
+                    //             return CoinCard(
+                    //               name: coinList[index].name,
+                    //               symbol: coinList[index].symbol,
+                    //               imageUrl: coinList[index].image,
+                    //               price: coinList[index].price.toDouble(),
+                    //               change: coinList[index].change.toDouble(),
+                    //               changePercentage:
+                    //                   coinList[index].changePercentage.toDouble(),
+                    //             );
+                    //           },
+                    //         ),
+                    //       )
+                    //     : Padding(
+                    //         padding: const EdgeInsets.symmetric(horizontal: 5),
+                    //         child: new ListView.separated(
+                    //           separatorBuilder:
+                    //               (BuildContext context, int index) =>
+                    //                   const Divider(
+                    //                       color: Colors.black,
+                    //                       endIndent: 8,
+                    //                       indent: 8),
+                    //           physics: NeverScrollableScrollPhysics(),
+                    //           shrinkWrap: true,
+                    //           itemCount: coinList.length,
+                    //           itemBuilder: (context, index) {
+                    //             final sorted = coinList
+                    //               ..sort((a, b) => !_marketCapDesc
+                    //                   ? b.marketCap.compareTo(a.marketCap)
+                    //                   : a.marketCap.compareTo(b.marketCap));
+                    //             return GestureDetector(
+                    //               onTap: () async {
+                    //                 Navigator.of(context).push(MaterialPageRoute(
+                    //                     builder: (context) => CoinDetail(
+                    //                         index: index, coin: sorted)));
+                    //               },
+                    //               child: CoinCard(
+                    //                 name: sorted[index].name,
+                    //                 symbol: sorted[index].symbol,
+                    //                 imageUrl: sorted[index].image,
+                    //                 price: sorted[index].price.toDouble(),
+                    //                 change: sorted[index].change.toDouble(),
+                    //                 changePercentage:
+                    //                     sorted[index].changePercentage.toDouble(),
+                    //               ),
+                    //             );
+                    //           },
+                    //         ),
+                    //       ),
+
+// itemCount: _searchResult.length + 1,
+                    // itemBuilder: (context, index) {
+                    //   return index == 0
+                    //       ? _searchItem()
+                    //       : GestureDetector(
+                    //           onTap: () async {
+                    //             Navigator.of(context).push(MaterialPageRoute(
+                    //                 builder: (context) => CoinDetail(
+                    //                     index: index, coin: coinList)));
+                    //           },
+                    //           child: CoinCard(
+                    //             name: _searchResult[index].name,
+                    //             symbol: _searchResult[index].symbol,
+                    //             imageUrl: _searchResult[index].image,
+                    //             price: _searchResult[index].price.toDouble(),
+                    //             change: _searchResult[index].change.toDouble(),
+                    //             changePercentage: _searchResult[index]
+                    //                 .changePercentage
+                    //                 .toDouble(),
+                    //           ),
+                    //         );
+                    // },
 
 /*
 class FirstScreen extends StatefulWidget {

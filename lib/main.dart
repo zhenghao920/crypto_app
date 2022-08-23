@@ -1,26 +1,96 @@
-import 'package:crypto_app/pages/home_page.dart';
+import 'package:animated_splash_screen/animated_splash_screen.dart';
+import 'package:crypto_app/google_signup_provider.dart';
+import 'package:crypto_app/locator.dart';
 import 'package:crypto_app/page/root_page.dart';
+import 'package:crypto_app/page/login_page.dart';
+import 'package:crypto_app/theme/theme.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+import 'package:lottie/lottie.dart';
 
-void main() {
+Future main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  setupLocator();
   runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) => GoogleSignup(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => ThemeProvider(),
+        ),
+      ],
+      child: Consumer2<ThemeProvider, GoogleSignup>(
+        builder: (context, provider, provider2, child) {
+          return MaterialApp(
+            title: 'Flutter Demo',
+            theme: provider.darkTheme ? dark : light,
+            home: SplashScreen(),
+          );
+        },
       ),
-      home: RootPage(),
     );
   }
 }
 
-/*
+class SplashScreen extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<ThemeProvider>(context, listen: false);
+    return AnimatedSplashScreen(
+        backgroundColor: provider.darkTheme ? Colors.grey.shade900 : Colors.white,
+        duration: 2000,
+        splashIconSize: 700,
+        animationDuration: Duration(seconds: 3),
+        splash: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Center(
+              child: Lottie.asset('assets/images/btc.json'),
+            ),
+          ],
+        ),
+        nextScreen: Navigate());
+  }
+}
+
+class Navigate extends StatelessWidget {
+  const Navigate({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: StreamBuilder(
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(
+              child: CircularProgressIndicator(),
+            );
+          } else if (snapshot.hasData) {
+            return RootPage();
+          } else if (snapshot.hasError) {
+            return Center(
+              child: Text('Error'),
+            );
+          } else
+            return LoginPage();
+        },
+        stream: FirebaseAuth.instance.authStateChanges(),
+      ),
+    );
+  }
+}
+
+/*  
 Payload payloadFromJson(String str) => Payload.fromJson(json.decode(str));
 
 String payloadToJson(Payload data) => json.encode(data.toJson());
