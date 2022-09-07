@@ -338,28 +338,25 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       Provider.of<GoogleSignup>(context, listen: false);
                   await provider.googleSignup();
                 } on FirebaseAuthException catch (e) {
-                  print("Error: $e");
-                  Navigator.of(context).pop();
+                  showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                            title: Text('Warning!'),
+                            content: Text(e.message.toString()),
+                            actions: [
+                              TextButton(
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                  },
+                                  child: Text('Ok')),
+                            ],
+                          ));
                 }
               },
               icon: FaIcon(
                 FontAwesomeIcons.google,
               ),
               label: Text('Continue with Google')),
-          Consumer<ThemeProvider>(
-            builder: (context, provider, child) {
-              return SwitchListTile(
-                title: Text('Color Theme'),
-                value: provider.darkTheme,
-                onChanged: (value) {
-                  provider.toggleTheme();
-                },
-                activeColor: Colors.yellow,
-                inactiveThumbImage: AssetImage("assets/images/sunny.png"),
-                activeThumbImage: AssetImage("assets/images/half-moon.png"),
-              );
-            },
-          ),
         ],
       ),
     );

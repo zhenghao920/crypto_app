@@ -24,32 +24,32 @@ class _WalletPageState extends State<WalletPage> {
   int page = 0;
   Timer? carasouelTimer;
 
-  @override
-  void initState() {
-    // TODO: implement initState
-    //coinRepo.fetchNews();
-    pageController = PageController(initialPage: 0, viewportFraction: 0.85);
-    carasouelTimer = timer();
-    super.initState();
-  }
+  // @override
+  // void initState() {
+  //   // TODO: implement initState
+  //   //coinRepo.fetchNews();
+  //   pageController = PageController(initialPage: 0, viewportFraction: 0.85);
+  //   carasouelTimer = timer();
+  //   super.initState();
+  // }
 
-  @override
-  void dispose() {
-    // TODO: implement dispose
-    pageController.dispose();
-    super.dispose();
-  }
+  // @override
+  // void dispose() {
+  //   // TODO: implement dispose
+  //   pageController.dispose();
+  //   super.dispose();
+  // }
 
-  Timer timer() {
-    return Timer.periodic(Duration(seconds: 3), (timer) {
-      if (page == 4) {
-        page = 0;
-      }
-      pageController.animateToPage(page,
-          duration: Duration(seconds: 1), curve: Curves.easeInOutCirc);
-      page++;
-    });
-  }
+  // Timer timer() {
+  //   return Timer.periodic(Duration(seconds: 3), (timer) {
+  //     if (page == 4) {
+  //       page = 0;
+  //     }
+  //     pageController.animateToPage(page,
+  //         duration: Duration(seconds: 1), curve: Curves.easeInOutCirc);
+  //     page++;
+  //   });
+  // }
 
   Future<List<New>> getNews() async {
     final news = await http.get(
@@ -111,23 +111,26 @@ class _WalletPageState extends State<WalletPage> {
         //             });
         //       }),
         // ),
+        // SizedBox(
+        //   height: 10,
+        // ),
+        // Row(
+        //     mainAxisAlignment: MainAxisAlignment.center,
+        //     children: List.generate(
+        //         5,
+        //         (index) => Container(
+        //               margin: EdgeInsets.all(2),
+        //               child: Icon(
+        //                 Icons.circle,
+        //                 size: 12,
+        //                 color: page == index
+        //                     ? Theme.of(context).accentColor
+        //                     : Theme.of(context).shadowColor,
+        //               ),
+        //             ))),
         SizedBox(
-          height: 10,
+          height: 60,
         ),
-        Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-                5,
-                (index) => Container(
-                      margin: EdgeInsets.all(2),
-                      child: Icon(
-                        Icons.circle,
-                        size: 12,
-                        color: page == index
-                            ? Theme.of(context).accentColor
-                            : Theme.of(context).shadowColor,
-                      ),
-                    ))),
         Container(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -143,6 +146,7 @@ class _WalletPageState extends State<WalletPage> {
                   ),
                 ),
               ),
+              SizedBox(height: 150,),
               Consumer<ThemeProvider>(
                 builder: (context, provider, child) {
                   return SwitchListTile(
